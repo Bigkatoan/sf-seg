@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Benchmark từng phần của sf_seg để tìm bottleneck."""
+"""Wrapper for src.utils.benchmark — see that module for details."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sf_seg import sf_seg, AttentionBlock
+from src.models.sf_seg import sf_seg, _clamped_softmax
 
 B, C, H, W = 64, 128, 128, 128
 L = H * W
@@ -37,9 +37,9 @@ print("=" * 55)
 print("Input shape: (B=%d, C=%d, H=%d, W=%d)" % (B, C, H, W))
 print("=" * 55)
 
-x      = torch.randn(B, 3, H, W, device=device)
-score  = torch.randn(B, C, L, device=device)
-p      = F.softmax(score, dim=-1) * K
+x = torch.randn(B, 3, H, W, device=device)
+score = torch.randn(B, C, L, device=device)
+p = F.softmax(score, dim=-1) * K
 
 # ── 1. Các CUDA op riêng lẻ trong _clamped_softmax ──────────────────────────
 print("\n[1] Từng op trong _clamped_softmax  (shape B,C,L = %d,%d,%d)" % (B, C, L))
@@ -55,16 +55,16 @@ bench("sort(%d phần tử)" % K,
       lambda: torch.sort(top_vals, dim=-1, descending=True))
 
 top_sorted = torch.sort(top_vals, dim=-1, descending=True).values
-cumsum     = top_sorted.cumsum(dim=-1)
-j_idx      = torch.arange(1, K + 1, device=device, dtype=torch.float32)
-lam_j      = (j_idx - cumsum) / (L - j_idx).clamp(min=1e-9)
+cumsum = top_sorted.cumsum(dim=-1)
+j_idx = torch.arange(1, K + 1, device=device, dtype=torch.float32)
+lam_j = (j_idx - cumsum) / (L - j_idx).clamp(min=1e-9)
 bench("valid mask + j_sat + gather",
       lambda: (
           (top_sorted - 1.0 >= lam_j).long().sum(-1, keepdim=True)
       ))
 
 bench("_clamped_softmax full",
-      lambda: AttentionBlock._clamped_softmax(score, float(K)))
+      lambda: _clamped_softmax(score, float(K)))
 
 # ── 2. Encoder CNN ───────────────────────────────────────────────────────────
 print("\n[2] Encoder CNN  (B=%d, 3, %d, %d)" % (B, H, W))
@@ -72,7 +72,7 @@ print("\n[2] Encoder CNN  (B=%d, 3, %d, %d)" % (B, H, W))
 model = sf_seg(num_channels=C).to(device)
 
 bench("encoder forward only",
-      lambda: model.attention_block.encoder(x))
+      lambda: model.head_large.enc1(x))
 
 # ── 3. Full model ────────────────────────────────────────────────────────────
 print("\n[3] Full model forward")
