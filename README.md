@@ -316,3 +316,7 @@ cp checkpoints/sf_seg_best.pt checkpoints/sf_seg_384.pt
 
 Train phần lớn ở 384px (nhanh ~1.8× so với 512), rồi tuning ngắn ở 512px để model
 quen độ phân giải eval. Full loss xuyên suốt (CE + soft IoU + aux + presence + diversity).
+
+## Weights / large files
+
+Pretrained weights are published as assets of the [`weights-v1` release](../../releases/tag/weights-v1) (they were removed from git history to keep the repo small). Download into `checkpoints/`.
